@@ -71,3 +71,57 @@ def test_null_feature():
         json={"features": features},
     )
     assert response.status_code == 200
+
+def test_prediction_response_structure():
+    response = client.post(
+        "/predict",
+        json={"features": valid_features()},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    assert set(body.keys()) == {
+        "prediction",
+        "label",
+        "confidence",
+        "disclaimer",
+    }
+    assert body["prediction"] in [0, 1]
+    assert isinstance(body["label"], str)
+    assert isinstance(body["confidence"], (int, float))
+    assert 0 <= body["confidence"] <= 1
+    assert "not a medical diagnosis" in body["disclaimer"]
+
+
+def test_non_finite_feature_is_rejected():
+    features = valid_features()
+    features["age"] = "Infinity"
+
+    response = client.post(
+        "/predict",
+        json={"features": features},
+    )
+
+    assert response.status_code == 422
+
+
+def test_boolean_feature_is_rejected():
+    features = valid_features()
+    features["age"] = True
+
+    response = client.post(
+        "/predict",
+        json={"features": features},
+    )
+
+    assert response.status_code == 422
+
+
+def test_invalid_request_body_is_rejected():
+    response = client.post(
+        "/predict",
+        json={},
+    )
+
+    assert response.status_code == 422

@@ -1,26 +1,24 @@
-
 from pathlib import Path
+import json
 import logging
 import math
 
 import joblib
 import pandas as pd
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_PATH = ROOT / "models" / "heart_disease_model.joblib"
 INFO_PATH = ROOT / "models" / "model_info.json"
 
-import json
-
 with open(INFO_PATH, encoding="utf-8") as f:
     MODEL_INFO = json.load(f)
 
 FEATURES = MODEL_INFO["features"]
 
-# Only load a model artifact created by your own training process.
+# Load the trained model.
 model = joblib.load(MODEL_PATH)
 
 logging.basicConfig(
@@ -40,7 +38,7 @@ app = FastAPI(
 
 
 class PredictionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", strict=True)
     features: dict[str, float | None]
 
 
@@ -55,12 +53,16 @@ def home():
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "model_loaded": model is not None}
+    return {
+        "status": "healthy",
+        "model_loaded": model is not None,
+    }
 
 
 @app.post("/predict")
 def predict(request: PredictionRequest):
     supplied = request.features
+
     missing = sorted(set(FEATURES) - set(supplied))
     extra = sorted(set(supplied) - set(FEATURES))
 
@@ -74,15 +76,24 @@ def predict(request: PredictionRequest):
         )
 
     values = []
+
     for name in FEATURES:
         value = supplied[name]
 
-        if value is not None:
-            if isinstance(value, bool) or not math.isfinite(value):
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Feature '{name}' must be a finite number or null.",
-                )
+        # Reject Boolean values because bool is a subclass of int in Python.
+        if isinstance(value, bool):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Feature '{name}' must be a number or null.",
+            )
+
+        # Reject NaN and positive/negative infinity.
+        if value is not None and not math.isfinite(value):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Feature '{name}' must be a finite number or null.",
+            )
+
         values.append(value)
 
     row = pd.DataFrame([values], columns=FEATURES)
@@ -91,6 +102,7 @@ def predict(request: PredictionRequest):
         prediction = int(model.predict(row)[0])
         probabilities = model.predict_proba(row)[0]
         confidence = float(max(probabilities))
+
     except Exception:
         logging.exception("Prediction failed")
         raise HTTPException(
