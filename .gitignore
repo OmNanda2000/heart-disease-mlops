@@ -1,0 +1,25 @@
+# Python environment
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# MLflow local tracking
+mlflow.db
+mlflow.db-shm
+mlflow.db-wal
+mlruns/
+
+# Secrets
+.env
+.env.*
+
+# Logs and generated reports
+api.log
+reports/
+screenshots/models/
+
+# IDE
+.vscode/
+data/
+screenshots/

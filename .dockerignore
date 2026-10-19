@@ -1,0 +1,11 @@
+.venv
+__pycache__
+.git
+.pytest_cache
+mlruns
+screenshots
+notebooks
+tests
+reports
+data
+*.log
